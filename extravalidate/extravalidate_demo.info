@@ -1,0 +1,7 @@
+; $Id: extravalidate_demo.info,v 1.1 2007/07/15 18:21:56 ralph Exp $
+name = Extra Field Validation Demo
+description = Demonstrates how extra field validation works
+dependencies[] = extravalidate
+package = Development
+version = 1.0
+core = 6.x

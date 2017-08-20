@@ -1,0 +1,204 @@
+<?php
+
+// $Id: extravalidate.module,v 1.2 2007/07/15 18:41:06 ralph Exp $
+
+// (C)2007, Ralph Bolton, Pre-Emptive Limited
+// GNU Public License V2 licensed.
+// No warranty is expressed or implied. Use of this software is
+// entirely at the user's risk. Pre-Emptive or it's employees accept
+// no liability for any damage or loss caused by use of this software. 
+// For more information, please see http://www.pre-emptive.net/gpl2
+
+/**
+ * Display help and module information
+ * @param section which section of the site we're displaying help 
+ * @return help text for section
+ */
+function extravalidate_help($section='') {
+  $output = '';
+
+  switch ($section) {
+    case "admin/help#hitcount":
+      $output = "Help text in extravalidate.module";
+      break;
+  }
+
+  return $output;
+} // function hitcount_help
+
+/**
+ * Implementation of hook_perm. This module doesn't really use permissions much.
+ * @param none
+ * @return an array of permissions
+ */
+function extravalidate_perm() {
+  return array();
+}
+
+function extravalidate_theme() {
+  return array();
+}
+
+/** 
+ * Implementation of hook_menu. Not used.
+ */
+function extravalidate_menu() {
+  return array();
+}
+
+/**
+ * extravalidate_validate() is a recursive function that performs additional
+ * validation on form elements. It looks for special array elements for
+ * instructions on how to validate a given form element. This is mostly of
+ * use in textfields and textareas.
+ *
+ * Validation options are integer, float or callbacks. Integers must be
+ * numeric, and only contain characters in the group -0123456789. Float
+ * numbers are the same, except decimals are also allowed. Both can also
+ * check that the number is within a pre-defined range. For more complex
+ * validation, it is possible to supply a callback argument. The callback
+ * function is called with the element requiring validation, the location
+ * in the form "tree", and the value. This means callbacks can be very
+ * simple, not needing to decypher $form_state or any other complex
+ * activities.
+ *
+ * This is an API function accessible to other modules. It
+ * should be called from within a module's normal form validate function with:
+ * module_invoke('extravalidate', 'validate', $form, $form_state);
+ * It must be passed the $form and $form_state variables that are passed to
+ * validate handlers by Drupal.
+ *
+ * For more information, see http://www.pre-emptive.net/doco/documentation
+ * @param $form, $form_state
+ * @return none
+ */
+// Users of this function should not use $prefix or $extra_prefix
+function extravalidate_validate($form, &$form_state, $prefix = array(), $extra_prefix = array()) {
+  foreach(element_children($form) as $key) {
+    $new = $prefix;
+    $new[] = $key;
+    extravalidate_validate($form[$key], $form_state, $new, $extra_prefix);
+  }
+
+  if(element_properties($form)) {
+    // We've got an actual form element here. Check to see if it's got
+    // our special tags in it
+    if(isset($form['#extra_validate']) && is_array($form['#extra_validate'])) {
+      $set_error_string = implode('][', $prefix);
+      if(isset($form['#title']) && $form['#title']) {
+        $title = $form['#title'];
+      } else {
+        $title = '['  . $set_error_string . ']';
+      }
+
+      // Now try to get a value for this form element. We try to see
+      // if it's burried in the values (ie. #tree => TRUE) and then
+      // see if it's available flattened. We can't check for #tree
+      // because we don't know if we were (ever) called with the full
+      // form, or just a sub-section of it.
+      // Keep a copy of the prefix, which we can shorten if
+      // we find we're on a flattened form.
+      $value_prefix = $prefix;
+
+      // Unset $value so that we can see if it gets set
+      unset($value);
+
+      // Now work out a string that can be used in an eval() statement:
+      $value_prefix_name = "'" . implode("']['", $value_prefix) . "'";
+      $code = "if(isset(\$form_state['values'][$value_prefix_name])) { \$value = \$form_state['values'][$value_prefix_name];}";
+      // Try it (this may set $value)
+      eval($code);
+
+      if(!isset($value)) {
+        // Try it flattened...
+        if(isset($value_prefix[ (count($value_prefix) - 1) ])) {
+          $key = $prefix[ (count($prefix) - 1) ];
+          if(isset($form_state['values'][$key])) {
+            $value = $form_state['values'][$key];
+            // Also set $value_prefix accordingly
+            $value_prefix = array($key);
+            $set_error_string = $key;
+          }
+        }
+      }
+
+
+      if(!isset($value) || $value == '') {
+        // If the value is not set, we can't do anything else useful. If the
+        // field is optional, then leaving it empty is fine. If it's required
+        // then Drupal will grumble without us having to do anything. Even
+        // though we might be able to say "must be an integer between 5 and
+        // 10", that will be lost because Drupal says "field is required"
+        // over the top of our message :-(
+        return;
+      }
+
+      if(isset($form['#extra_validate']['type'])) {
+        // Is a standard type of field. Check for any often-used
+        // parameters before seeing what to do to validate this field.
+        if(isset($form['#extra_validate']['max'])) {
+          $max = $form['#extra_validate']['max'];
+        }
+        if(isset($form['#extra_validate']['min'])) {
+          $min = $form['#extra_validate']['min'];
+        }
+        switch($form['#extra_validate']['type']) {
+          case 'integer':
+            if(!preg_match('/^[0-9-]*$/', $value) || (isset($min) && $value < $min) || (isset($max) && $value > $max)) {
+              // Not an integer, or out of range. Now work out text...
+              if(isset($max) && isset($min)) {
+                form_set_error($set_error_string, t('%name must be an integer between @min and @max.',
+                  array('%name' => $title, '@min' => $min, '@max' => $max)));
+              } elseif(isset($max)) {
+                form_set_error($set_error_string, t('%name must be an integer less than @max.',
+                  array('%name' => $title, '@max' => $max)));
+              } elseif(isset($min)) {
+                form_set_error($set_error_string, t('%name must be an integer greater than @min.',
+                  array('%name' => $title, '@min' => $min)));
+              } else {
+                form_set_error($set_error_string, t('%name must be an integer.',
+                  array('%name' => $title)));
+              }
+            }
+            break;
+          case 'float':
+            if(!preg_match('/^[\.0-9-]*$/', $value) || (isset($min) && $value < $min) || (isset($max) && $value > $max)) {
+              // Not an integer, or out of range. Now work out text...
+              if(isset($max) && isset($min)) {
+                form_set_error($set_error_string, t('%name must be a number between @min and @max.',
+                  array('%name' => $title, '@min' => $min, '@max' => $max)));
+              } elseif(isset($max)) {
+                form_set_error($set_error_string, t('%name must be a number less than @max.',
+                  array('%name' => $title, '@max' => $max)));
+              } elseif(isset($min)) {
+                form_set_error($set_error_string, t('%name must be a number greater than @min.',
+                  array('%name' => $title, '@min' => $min)));
+              } else {
+                form_set_error($set_error_string, t('%name must be a number.',
+                  array('%name' => $title)));
+              }
+            }
+            break;
+        } // end switch
+      } elseif(isset($form['#extra_validate']['callback module']) && isset($form['#extra_validate']['callback function'])) {
+        // This is the preferred (and Drupal API friendly) way to call
+        // callbacks in other modules.
+        module_invoke($form['#extra_validate']['callback module'],
+          $form['#extra_validate']['callback function'],
+          $form,
+          $value_prefix,
+          $value);
+      } elseif(isset($form['#extra_validate']['callback function'])) {
+        // This still works, although may not do in the future...
+        if(function_exists($form['#extra_validate']['callback function'])) {
+          call_user_func_array($form['#extra_validate']['callback function'],
+            array($form, $value_prefix, $value));
+        }
+      } // end type of validator
+    } // end if validator tag present
+  } // end if element_properties
+}
+
+// The following line is for Vim users - please don't delete it.
+// vim: set filetype=php expandtab tabstop=2 shiftwidth=2:
+

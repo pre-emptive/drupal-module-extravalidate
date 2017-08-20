@@ -1,0 +1,106 @@
+<?php
+
+// $Id: extravalidate_demo.module,v 1.2 2007/07/15 18:41:06 ralph Exp $
+
+// (C)2007, Ralph Bolton, Pre-Emptive Limited
+// GNU Public License V2 licensed.
+// No warranty is expressed or implied. Use of this software is
+// entirely at the user's risk. Pre-Emptive or it's employees accept
+// no liability for any damage or loss caused by use of this software. 
+// For more information, please see http://www.pre-emptive.net/gpl2
+
+/**
+ * Display help and module information
+ * @param section which section of the site we're displaying help 
+ * @return help text for section
+ */
+function extravalidate_demo_help($section='') {
+  $output = '';
+
+  switch ($section) {
+    case "admin/help#hitcount":
+      $output = "Help text in extravalidate.module";
+      break;
+  }
+
+  return $output;
+} // function hitcount_help
+
+/**
+ * Implementation of hook_perm. This module doesn't really use permissions much.
+ * @param none
+ * @return an array of permissions
+ */
+function extravalidate_demo_perm() {
+  return array('use extravalidate demo');
+}
+
+function extravalidate_demo_theme() {
+  return array();
+}
+
+/** 
+ * Implementation of hook_menu. Not used.
+ */
+function extravalidate_demo_menu() {
+  $items = array();
+
+  $items['extravalidate'] = array(
+    'title' => 'Extra Validate Demo',
+    'type' => MENU_NORMAL_ITEM,
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('extravalidate_demo_example_form'),
+    'access arguments' => array('use extravalidate demo'),
+  );
+
+  return $items;
+}
+
+function extravalidate_demo_example_form() {
+  $form = array();
+
+  $form['one']['integer'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Integer Field'),
+    '#extra_validate' => array('type' => 'integer', 'min' => 5, 'max' => 10),
+    '#description' => 'This field only accepts integers between 5 and 10.',
+  );
+
+  $form['two']['float'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Real Number Field'),
+    '#extra_validate' => array('type' => 'float', 'min' => '-5.0', 'max' => '5.0'),
+    '#description' => 'This field only accepts floating point numbers between -5.0 and 5.0',
+  );
+
+  $form['three']['callback'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Callback Field'),
+    '#extra_validate' => array('callback module' => 'extravalidate_demo', 'callback function' => 'example_callback'),
+    '#description' => 'This field is validated by a callback function, and only accepts names of colours or RGB codes preceeded by a #',
+  );
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Submit'),
+  );
+
+  return $form;
+}
+
+function extravalidate_demo_example_form_validate($form, &$form_state) {
+  $return = module_invoke('extravalidate', 'validate', $form, $form_state);
+}
+
+function extravalidate_demo_example_callback($form, $tree, $value) {
+  $colours = array('red', 'green', 'blue');
+  // This is a really basic check, and not really complete!
+  if(!in_array($value, $colours) && !preg_match('/^\s*#[0-9a-fA-F]+/', $value)) {
+    $string = implode('][', $tree);
+    form_set_error($string, t('%name must be a colour or an RGB value preceeded by #', array('%name' => $form['#title'])));
+  }
+}
+
+// The following line is for Vim users - please don't delete it.
+// vim: set filetype=php expandtab tabstop=2 shiftwidth=2:
+

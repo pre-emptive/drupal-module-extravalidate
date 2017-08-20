@@ -1,0 +1,7 @@
+; $Id: extravalidate.info,v 1.1 2007/07/15 18:21:56 ralph Exp $
+name = Extra Field Validation
+description = Provides developers with convenient extra form field validation
+;dependencies[] =
+package = Development
+version = 1.0
+core = 6.x
